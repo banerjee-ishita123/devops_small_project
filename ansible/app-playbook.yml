@@ -1,0 +1,59 @@
+- name: Set up the App server
+  hosts: app
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Docker and curl
+      apt:
+        name:
+          - docker.io
+          - curl
+        state: present
+
+    - name: Let the ubuntu user use Docker
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Make sure Docker is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install kubectl
+      command: snap install kubectl --classic
+      args:
+        creates: /snap/bin/kubectl
+
+    - name: Install KIND
+      get_url:
+        url: https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+        dest: /usr/local/bin/kind
+        mode: '0755'
+
+    - name: Copy the KIND cluster config
+      copy:
+        dest: /home/ubuntu/kind-config.yaml
+        owner: ubuntu
+        content: |
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+              extraPortMappings:
+                - containerPort: 30080
+                  hostPort: 30080
+                  listenAddress: "0.0.0.0"
+
+    - name: Create the KIND cluster
+      become: yes
+      become_user: ubuntu
+      command: kind create cluster --name devops --config /home/ubuntu/kind-config.yaml
+      args:
+        creates: /home/ubuntu/.kube/config
+

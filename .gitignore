@@ -1,0 +1,9 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.swp
+ansible/inventory.ini
+*.pem
+devops-key*
+target/

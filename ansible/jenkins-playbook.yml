@@ -1,0 +1,53 @@
+- name: set up the jenkins server
+  hosts: jenkins
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+    - name: Install java, Maven, Git, Docker
+      apt:
+        name:
+          - openjdk-21-jdk
+          - maven
+          - git
+          - docker.io
+          - curl
+        state: present
+    - name: Add the Jenkins key
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
+        force: yes
+    - name: Add the Jenkins repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: no
+    
+    - name: Let the jenkins and ubuntu users use Docker
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop:
+        - jenkins
+        - ubuntu
+    - name: Make sure Docker is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Restart Jenkins so the Docker permission works
+      service:
+        name: jenkins
+        state: restarted
+        enabled: yes
+
+
