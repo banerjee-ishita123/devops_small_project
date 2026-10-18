@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 public class App {
 
     public static String message() {
-        return "Hello DevOps! Version 1";
+        return "Hello from Ishita's small project";
     }
 
     public static void main(String[] args) throws IOException {
