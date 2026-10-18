@@ -1,0 +1,71 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE = 'ishitabanerjee/devops-app'
+    TAG   = "${env.BUILD_NUMBER}"
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Maven Build and Test') {
+      steps {
+        dir('app') {
+          sh 'mvn clean package'
+        }
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        dir('app') {
+          sh 'docker build -t $IMAGE:$TAG .'
+        }
+      }
+    }
+
+    stage('Push to Docker Hub') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                          usernameVariable: 'DH_USER',
+                                          passwordVariable: 'DH_PASS')]) {
+          sh 'echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin'
+          sh 'docker push $IMAGE:$TAG'
+        }
+      }
+    }
+
+    stage('Deploy to Kubernetes') {
+      steps {
+        sh 'sed -i "s|image: .*|image: ${IMAGE}:${TAG}|" k8s/deployment.yml'
+        withCredentials([sshUserPrivateKey(credentialsId: 'app-server-ssh',
+                                           keyFileVariable: 'KEY')]) {
+          sh '''
+            SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            scp $SSH_OPTS -i "$KEY" k8s/deployment.yml k8s/service.yml ubuntu@${APP_SERVER_IP}:~/k8s/
+            ssh $SSH_OPTS -i "$KEY" ubuntu@${APP_SERVER_IP} \
+              "/snap/bin/kubectl apply -f ~/k8s/deployment.yml -f ~/k8s/service.yml && /snap/bin/kubectl rollout status deployment/devops-app --timeout=120s"
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker logout || true'
+    }
+    success {
+      echo "Deployed ${env.IMAGE}:${env.TAG}"
+    }
+    failure {
+      echo 'Pipeline failed. Check the console output above.'
+    }
+  }
+}
